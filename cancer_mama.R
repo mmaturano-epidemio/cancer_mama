@@ -12,6 +12,16 @@ poblaciones_long <- readRDS("poblaciones_consolidadas.rds")
 setkey(def_full, causa)
 ca <- def_full["C50"][nomsexo == "Mujer"]
 
+poblacion_estandar_oms <- read.table("clipboard", 
+                                     # Fuente: https://seer.cancer.gov/stdpopulations/world.who.html
+                                     header = TRUE,
+                                     sep = "\t")
+poblacion_estandar_oms_DT <- setDT(poblacion_estandar_oms)
+poblacion_estandar_oms_DT[Grupo.de.edad %ilike% "^0-|^5-", Grupo.de.edad := "0-9"]
+poblacion_estandar_oms_DT[Grupo.de.edad %ilike% "^8|^9|^100", Grupo.de.edad := "80+"]
+poblacion_estandar_oms_DT[, .(Total=sum(as.numeric(gsub("\\.", "", Redondeado.a.números.enteros)), na.rm = TRUE)),
+                       Grupo.de.edad]
+
 # ---- Ver tasa bruta ----
 muertes_ca <- ca[, .(cuenta = sum(cuenta, na.rm = TRUE)), keyby = .(ano, provres, nomprov)]
 
@@ -112,3 +122,12 @@ g3 <- ggplot(plot_data) +
   theme(legend.position = "bottom")
 
 print(g3)
+
+ca[provres%in%c(1, 2, 6, 58) & grupo_edad =="30-34", .(casos = sum(cuenta)), .(nomprov, ano)]
+
+dcast(data = ca[provres%in%c(1, 2, 6, 58) & grupo_edad =="30-34"], 
+      formula = ano~nomprov,
+      fun.aggregate = sum,
+      value.var = "cuenta"
+      ) |> flextable::flextable() |> flextable::set_caption("Defunciones CA mama mujeres 30 a 34 años")
+
