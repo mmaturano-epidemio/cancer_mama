@@ -6,11 +6,17 @@ library(data.table)
 library(ggplot2)
 library(viridis)
 
-# ---- Importar y filtrar datos ----
+# ---- Importar y adecuar datos ----
+
 def_full <- readRDS("datos_consolidados.rds")
+
 poblaciones_long <- readRDS("poblaciones_consolidadas.rds")
+
 setkey(def_full, causa)
-ca <- def_full["C50"][nomsexo == "Mujer"]
+ca <- def_full["C50"][nomsexo == "Mujer"&!is.na(grupo_edad)]
+
+pob_estandar <- readRDS("poblacion_estandar.rds")
+setnames(pob_estandar, "Grupo.de.edad", "grupo_edad")
 
 # ---- Ver tasa bruta ----
 muertes_ca <- ca[, .(cuenta = sum(cuenta, na.rm = TRUE)), keyby = .(ano, provres, nomprov)]
@@ -58,7 +64,6 @@ g1 <- ggplot(plot_data) +
     y = "Defunciones cada 100.000 mujeres",
     x = "Año"
   )
-g1
 
 
 g2 <- ca[!grupo_edad %ilike% "^[0-2]" &
@@ -79,14 +84,13 @@ g2 <- ca[!grupo_edad %ilike% "^[0-2]" &
   ) +
   theme_minimal() +
   viridis::scale_fill_viridis()
-g2
 # plotly::ggplotly(g1)  
 
-plot_data <- ca[!grupo_edad %ilike% "^[0-2]" & 
+plot_data2 <- ca[!grupo_edad %ilike% "^[0-2]" & 
                   !is.na(grupo_edad) & 
                   provres %in% c(1, 58, 6, 2)]
 
-g3 <- ggplot(plot_data) +
+g3 <- ggplot(plot_data2) +
   aes(x = ano, y = tasa, colour = nomprov, group = nomprov) +
   # Líneas originales con mucha transparencia para dejar protagonismo a la tendencia
   geom_line(linewidth = .4, alpha = 0.1) + 
@@ -111,13 +115,95 @@ g3 <- ggplot(plot_data) +
   ) +
   theme(legend.position = "bottom")
 
-print(g3)
 
-ca[provres%in%c(1, 2, 6, 58) & grupo_edad =="30-34", .(casos = sum(cuenta)), .(nomprov, ano)]
+# ---- Estandarización de tasas ----
+# Calcular el peso de cada grupo de edad (proporción sobre el total)
+pob_estandar[, peso := Total / sum(Total)]
 
-dcast(data = ca[provres%in%c(1, 2, 6, 58) & grupo_edad =="30-34"], 
-      formula = ano~nomprov,
-      fun.aggregate = sum,
-      value.var = "cuenta"
-      ) |> flextable::flextable() |> flextable::set_caption("Defunciones CA mama mujeres 30 a 34 años")
 
+# Hacemos el join con los pesos de la OMS
+ca_est <- merge(ca, pob_estandar[, .(grupo_edad, peso)], 
+                by = "grupo_edad", 
+                all.x = TRUE)
+
+# Calculamos las tasas finales agrupadas por provincia y año
+tasas_finales <- ca_est[, .(
+  muertes = sum(cuenta, na.rm = TRUE),
+  pob_total = sum(poblacion, na.rm = TRUE),
+  # Tasa bruta: muertes totales / poblacion total
+  tasa_bruta = (sum(cuenta, na.rm = TRUE) / sum(poblacion, na.rm = TRUE)) * 100000,
+  # Tasa ajustada: sumatoria de (tasa específica del grupo * peso del grupo en la OMS)
+  tasa_ajustada = sum(tasa * peso, na.rm = TRUE) 
+), keyby = .(ano, provres, nomprov)]
+
+g4 <- ggplot(tasas_finales[ano %in% 2005:2024]) +
+  aes(x = ano, y = reorder(nomprov, tasa_ajustada), fill = tasa_ajustada) +
+  geom_tile() +
+  viridis::scale_fill_viridis(option = "inferno", direction = -1) +
+  labs(title = "Tasa de mortalidad ajustada según provincia por año",
+       subtitle = sprintf("República Argentina, período %d-%d, n = %s",
+       min(ca$ano, na.rm = T),
+       max(ca$ano, na.rm = T),
+       format(total, big.mark = ".", decimal.mark = ",")),
+       caption = "Ajuste según población mundial estándar de la OMS",
+       x = "Año", 
+       y = "Tasa ajustada de mortalidad por cáncer de mama cada 100.000 mujeres") +
+  theme_minimal()
+  
+
+
+g5 <- ggplot(tasas_finales[provres %in% c(1, 58, 2, 6)]) +
+  aes(x = ano, y = tasa_ajustada, colour = nomprov, group = nomprov) +
+  # Líneas originales con mucha transparencia para dejar protagonismo a la tendencia
+  geom_line(linewidth = .4, alpha = 0.2) + 
+  geom_smooth(
+    method = "loess", 
+    se = FALSE,          
+    span = 0.5, 
+    linewidth = 1.2
+  ) +
+  theme_minimal() +
+  scale_color_manual(values = c("República Argentina (total país)" = "grey60", 
+                                "Neuquén" = "firebrick",
+                                "Buenos Aires" = "steelblue",
+                                "Ciudad Aut. de Buenos Aires" = "coral")) +
+  labs(title = "Comparativa de mortalidad estandarizada según jurisdicción por año",
+        subtitle = sprintf("República Argentina, período %d-%d, n = %s
+                           \nTendencia suavizada mediante LOESS",
+                           min(ca$ano, na.rm = T),
+                           max(ca$ano, na.rm = T),
+                           format(total, big.mark = ".", decimal.mark = ",")),
+        caption = "Ajuste según población mundial estándar de la OMS
+       \nFuente: Elaboración propia a partir de datos de DEIS e INDEC",
+        x = "Año", 
+        y = "Tasa ajustada de mortalidad por cáncer de mama cada 100.000 mujeres",
+       colour = "Jurisdicción") +
+  theme(legend.position = "bottom")
+
+tasas_finales[, unique(nomprov), provres]
+
+g6 <- ggplot(tasas_finales[provres %in% c(1, 58, 62, 94, 26, 78, 42)]) +
+  aes(x = ano, y = tasa_ajustada, colour = nomprov, group = nomprov) +
+  # Líneas originales con mucha transparencia para dejar protagonismo a la tendencia
+  geom_line(linewidth = .4, alpha = 0.2) + 
+  geom_smooth(
+    method = "loess", 
+    se = FALSE,          
+    span = 0.5, 
+    linewidth = 1.2
+  ) +
+  scale_fill_viridis_c() +
+  theme_minimal() +
+  labs(title = "Comparativa de mortalidad estandarizada por cáncer de mama según jurisdicción por año",
+       subtitle = sprintf("Región Patagonia, período %d-%d, n = %s
+                           \nTendencia suavizada mediante LOESS",
+                          min(ca$ano, na.rm = T),
+                          max(ca$ano, na.rm = T),
+                          format(total, big.mark = ".", decimal.mark = ",")),
+       caption = "Ajuste según población mundial estándar de la OMS
+       \nFuente: Elaboración propia a partir de datos de DEIS e INDEC",
+       x = "Año", 
+       y = "Tasa ajustada de mortalidad por cáncer de mama cada 100.000 mujeres",
+       colour = "Jurisdicción") +
+  theme(legend.position = "bottom")
+g6
