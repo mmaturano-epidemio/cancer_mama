@@ -427,7 +427,7 @@ saveRDS(poblaciones_long, "poblaciones_consolidadas.rds")
 
 ```{r}
 #| label: Mama 
-#| echo: false
+#| echo: true
 #| warning: false
 #| message: false
 # ==============================================================================
@@ -525,14 +525,21 @@ resumen_epidemiologico <- merge(
 # Ordenar por jurisdicción y año
 setkey(resumen_epidemiologico, provres, ano)
 
+```
+
+```{r}
+#| label: Print 
+#| echo: true
+#| warning: false
+#| message: false
 # ==============================================================================
 # 6. VERIFICACIÓN
 # ==============================================================================
-print("Resumen para total país en 2022:")
-resumen_epidemiologico[provres == 1 & ano == 2022]
 
-print("\nPrimeras filas del resumen:")
-head(resumen_epidemiologico, 10)
+resumen_epidemiologico |> 
+  head() |> 
+  flextable::flextable() |> 
+  flextable::theme_vanilla()
 
 ```
 
