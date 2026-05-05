@@ -1,0 +1,165 @@
+---
+title: "Cáncer de mama en la Argentina"
+output: html_document
+date: "2026-05-05"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+source("cancer_mama.R")
+source("funciones.R")
+source("tablero.R")
+```
+
+## Cáncer de mama
+Este es un documento de visualización de las tendencias del cáncer de mama en la Argentina
+
+## Resumen Ejecutivo {.unnumbered}
+
+:::: {style="display: flex; gap: 20px; flex-wrap: wrap;"}
+::: {.value-box style="flex: 1; min-width: 200px; background: #440154; color: white; padding: 20px; border-radius: 8px;"}
+**Total de casos**  
+`r format(sum(resumen_epidemiologico[provres==1, muertes_mama_total]), big.mark=".")`  
+2005-2024
+:::
+
+::: {.value-box style="flex: 1; min-width: 200px; background: #21918c; color: white; padding: 20px; border-radius: 8px;"}
+**Tasa bruta (promedio)**  
+`r round(resumen_epidemiologico[provres==1, mean(tasa_bruta)], 1)` x 100k  
+mujeres
+:::
+
+::: {.value-box style="flex: 1; min-width: 200px; background: #fde725; color: #333; padding: 20px; border-radius: 8px;"}
+**Grupo más afectado**  
+80+ años  
+`r round(ca[provres==1 & grupo_edad == "80+", mean(tasa)], 1)`
+:::
+::::
+
+
+## Tasa bruta de mortalidad {.tabset}
+### Mapa de calor 
+```{r hm_bruta, echo=FALSE}
+hm_cruda
+```
+### Líneas
+```{r lineas_bruta, echo=FALSE}
+
+lineas_cruda
+```
+### Mapa
+```{r mapa_bruta, echo=FALSE}
+
+mapa_cruda
+```
+
+### Área apilada (tasa)
+```{r apilada_tasa_bruta, echo=FALSE}
+crear_area_apilada_tasa <- function(datos_ca) {
+  
+  datos_plot <- ca[provres == 1 & !grupo_edad %like% "^[0-1]", 
+                   .(tasa=round(tasa, 2)), 
+                   keyby = .(ano, grupo_edad)]
+  
+  datos_plot %>%
+    group_by(ano) %>%
+    e_charts(grupo_edad) %>%
+    e_area(tasa, stack = "grp") %>%
+    e_title(text = "Distribución de tasa por edad a lo largo del tiempo") %>%
+    e_tooltip(trigger = "axis") %>%
+    e_legend(type = "scroll", bottom = 0) %>%
+    e_color(viridis::viridis(16))
+}
+
+crear_area_apilada_tasa(resumen_epidemiologico)
+```
+
+### Área apilada (casos)
+```{r apilada_bruta, echo=FALSE}
+crear_area_apilada_edad <- function(datos_ca) {
+  
+  datos_plot <- ca[provres == 1 & ! grupo_edad %like% "^[0-1]", 
+                   .(casos = sum(cuenta, na.rm = TRUE)), 
+                   keyby = .(ano, grupo_edad)]
+  
+  datos_plot %>%
+    group_by(ano) %>%
+    e_charts(grupo_edad) %>%
+    e_area(casos, stack = "grp") %>%
+    e_title(text = "Distribución de casos por edad a lo largo del tiempo") %>%
+    e_tooltip(trigger = "axis") %>%
+    e_legend(type = "scroll", bottom = 0) %>%
+    e_color(viridis::viridis(16))
+}
+
+crear_area_apilada_edad(resumen_epidemiologico)
+```
+
+### Tendencia grupos etarios
+```{r tendencia_ge, echo=FALSE}
+crear_small_multiples_edad <- function(datos_ca) {
+  library(ggplot2)
+  
+  datos_plot <- ca[provres == 1 &! grupo_edad %like% "^[0-2]", 
+                   .(Tasa = mean(tasa, na.rm = TRUE)), 
+                   by = .(Año = ano, `Grupo etario` = grupo_edad)]
+  
+  ggplot(datos_plot, aes(x = Año, y = Tasa)) +
+    geom_line(color = "#440154", linewidth = 1) +
+    geom_point(color = "#440154", size = 2) +
+    facet_wrap(~`Grupo etario`, scales = "free_y", ncol = 4) +
+    labs(title = "Tendencias por grupo etario",
+         subtitle = "República Argentina",
+         x = "Año", y = "Tasa x 100k mujeres") +
+    theme_minimal() +
+    theme(strip.background = element_rect(fill = "#f0f0f0"),
+          strip.text = element_text(face = "bold"))
+}
+
+ggplotly(crear_small_multiples_edad(resumen_epidemiologico))
+
+```
+
+### Datos Detallados 
+```{r tabla, echo=FALSE}
+library(DT)
+resumen_epidemiologico %>%
+  datatable(
+    filter = 'top',
+    options = list(pageLength = 20, scrollX = TRUE),
+    rownames = FALSE
+  ) %>%
+  formatRound(c('tasa_bruta', 'tasa_ajustada'), 2)
+```
+
+## Tasa ajustada de mortalidad {.tabset}
+### Mapa de calor 
+```{r hm_ajustada, echo=FALSE}
+hm_ajustada
+```
+### Líneas
+```{r lineas_ajustada, echo=FALSE}
+
+lineas_ajustada
+```
+### Mapa
+```{r mapa_ajustada, echo=FALSE}
+
+mapa_ajustada
+```
+
+## Mortalidad proporcional {.tabset}
+### Mapa de calor 
+```{r hm_proporcional, echo=FALSE}
+hm_proporcional
+```
+### Líneas
+```{r lineas_proporcional, echo=FALSE}
+
+lineas_proporcional
+```
+### Mapa
+```{r mapa_proporcional, echo=FALSE}
+
+mapa_proporcional
+```
