@@ -1,546 +1,178 @@
 ---
-title: "Mortalidad por cáncer de mama"
-subtitle: "República Argentina - Período 2005-2024"
-author: "Comité de Evaluación de Tecnologías Sanitarias - Provincia del Neuquén"
-author-meta: "Autor"
-format: html
-editor: visual
-toc: true
-toc-title: Contenidos
+title: "Cáncer de mama en la Argentina"
+output: html_document
+date: "2026-05-05"
 ---
 
-# Metodología
-
-## Procesamiento de datos
-```{r}
-#| label: setup 
-#| include: false
-library(data.table)
-library(readxl)
-library(janitor)
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+source("cancer_mama.R")
+source("funciones.R")
+source("tablero.R")
 ```
 
-### Datasets de defunciones
+## Cáncer de mama
+Este es un documento de visualización de las tendencias del cáncer de mama en la Argentina
 
-Este proceso asume la existencia de un subdirectorio llamado "defunciones" que contiene los datasets de DEIS en formato .csv y el diccionario de variables en .xlsx que se encuentran [clicando en este enlace](https://www.argentina.gob.ar/salud/deis/datos/defunciones) 
+## Resumen Ejecutivo {.unnumbered}
 
-```{r}
-#| label: Defunciones
-#| eval: false
-# ==============================================================================
-# 1. CARGA DE LIBRERÍAS E IMPORTACIÓN DE DATOS
-# ==============================================================================
-# ---- Carga de librerías ----
-library(data.table)
-library(readxl)
-library(janitor)
+:::: {style="display: flex; gap: 20px; flex-wrap: wrap;"}
+::: {.value-box style="flex: 1; min-width: 200px; background: #440154; color: white; padding: 20px; border-radius: 8px;"}
+**Total de casos**  
+`r format(sum(resumen_epidemiologico[provres==1, muertes_mama_total]), big.mark=".")`  
+2005-2024
+:::
 
-# ---- Importar datos ----
-list.files(path = "./defunciones") 
+::: {.value-box style="flex: 1; min-width: 200px; background: #21918c; color: white; padding: 20px; border-radius: 8px;"}
+**Tasa bruta (promedio)**  
+`r round(resumen_epidemiologico[provres==1, mean(tasa_bruta)], 1)` x 100k  
+mujeres
+:::
 
-archivos <- list.files(path = "./defunciones", 
-                       pattern = "^defweb", 
-                       full.names = TRUE)
+::: {.value-box style="flex: 1; min-width: 200px; background: #fde725; color: #333; padding: 20px; border-radius: 8px;"}
+**Grupo más afectado**  
+80+ años  
+`r round(ca[provres==1 & grupo_edad == "80+", mean(tasa)], 1)`
+:::
+::::
 
-lista <- lapply(archivos, function(file) {
-  # Extraer año del nombre del archivo
-  año <- as.integer(gsub("./defunciones/defweb|.csv|_0", "", file))
-  # Leer el archivo
-  dt <- fread(file, encoding = "Latin-1")
-  # Agregar columna de año
-  dt[, año := año]
-  return(dt)
-})
-# Combinar todos
-datos <- rbindlist(lista) |> clean_names()
+## Tasa bruta de mortalidad
 
-# ==============================================================================
-# 2. LIMPIAR DATOS
-# ==============================================================================
-# Importar diccionario de datos
-tablas <- excel_sheets("./defunciones/descdef1.xlsx")
+::: {.panel-tabset}
 
-# Construir tablas accesorias para hacer joins
-provres <- read_excel("./defunciones/descdef1.xlsx", sheet = 2) |> 
-  as.data.table() |> 
-  janitor::clean_names()
-provres[, codigo := as.integer(codigo)]
-
-sexo <- read_excel("./defunciones/descdef1.xlsx", sheet = 3) |> 
-  as.data.table() |> 
-  janitor::clean_names()
-sexo[, codigo := as.integer(codigo)]
-
-codmuer <- read_excel("./defunciones/descdef1.xlsx", sheet = 4) |> 
-  as.data.table() |> 
-  janitor::clean_names()
-
-# Adecuar objeto "datos"
-
-datos[, ano := ano + 2000]
-datos[provres, nomprov := i.valor, on = .(provres = codigo)]
-datos[sexo, nomsexo := i.valor, on = .(sexo = codigo)]
-datos[codmuer, nomcausa := i.valor, on = .(causa = codigo)]
-
-# Guardar
-saveRDS(datos, "./defunciones/defunciones_totales.rds")
-
+## Mapa de calor 
+```{r hm_bruta, echo=FALSE}
+hm_cruda
 ```
 
-### Datasets de poblaciones
+## Líneas
+```{r lineas_bruta, echo=FALSE}
+lineas_cruda
+```
 
-Este proceso asume la existencia de un subdirectorio llamado "poblaciones" que contiene los datasets de INDEC en formatos de libro de Excel para las proyecciones poblacionales por sexo y grupos quinquenales basadas en el [censo 2010](https://www.indec.gob.ar/ftp/cuadros/poblacion/c2_proyecciones_prov_2010_2040.xls) y en el [censo 2022](https://www.indec.gob.ar/ftp/cuadros/poblacion/proyecciones_jurisdicciones_2022_2040_c2.xlsx).
+## Mapa
+```{r mapa_bruta, echo=FALSE}
+mapa_cruda
+```
 
-El primero contiene un error de tipeo en el nombre de una hoja ("SANTE FE" en lugar de "SANTA FE"), que no es necesario salvar manualmente porque se resuelve al importarla con una adecuación ad hoc de la función de importación de datos.
-
-El período 2005-2009 se completa con datos proyectados localmente, por no estar disponibles estas poblaciones o proyecciones en el sitio web de INDEC.
-
-```{r}
-#| label: Poblaciones
-#| eval: false
-
-# ==============================================================================
-# 1. FUNCIÓN PARA IMPORTAR DATOS
-# ==============================================================================
-
-# Función para parsear poblaciones por año y jurisdicción 
-
-obtener_año <- function(jurisdicción = "total",
-                        año = 2022){
-  require(readxl)
-  require(data.table)
-  libro <- ifelse(año >= 2022, 
-                  "./poblaciones/proyecciones_jurisdicciones_2022_2040_c2.xlsx",
-                  "./poblaciones/c2_proyecciones_prov_2010_2040.xls")
+## Área apilada (tasa)
+```{r apilada_tasa_bruta, echo=FALSE}
+crear_area_apilada_tasa <- function(datos_ca) {
   
-  nombres_reales <- excel_sheets(libro)
-  sheet_names <- gsub("SANTE FE", "SANTA FE", nombres_reales) # Para hoja mal nombrada
+  datos_plot <- ca[provres == 1 & !grupo_edad %like% "^[0-1]", 
+                   .(tasa=round(tasa, 2)), 
+                   keyby = .(ano, grupo_edad)]
   
-  col_start_num <- fcase(año >= 2022, 2 + (año - 2022) * 4,
-                         año %in% 2010:2015, 2 + (año - 2010) * 4,
-                         default = 2 + (año - 2016) * 4)
-  
-  col_start <- LETTERS[col_start_num]
-  col_end <- LETTERS[col_start_num + 2]
-  row_start <- ifelse(año %in% 2016:2021, 32, 4)
-  row_end <- ifelse(año >= 2022, row_start + 23, row_start + 24)
-  
-  indice <- which(sheet_names %ilike% jurisdicción)
-  nom_jurisidicción <- sub(pattern = ".*-", replacement = "", x = sheet_names[indice])
-  sheet_original <- nombres_reales[indice]
-  
-  defunciones <- suppressWarnings(
-    read_excel(path = libro,
-               sheet = sheet_original, 
-               range = paste0(col_start, row_start, ":", col_end, row_end)))
-  
-  if (año >= 2022) {
-    grupo <- rbind("Total", " ",
-                   suppressWarnings(
-                     read_excel(path = libro,
-                                sheet = sheet_original, 
-                                range = "A6:A27")))
-  } else {
-    grupo <- rbind(" ", "Total",
-                   suppressWarnings(
-                     read_excel(path = libro,
-                                sheet = sheet_original, 
-                                range = "A6:A28")))
-  }
-  
-  names(grupo) <- "Grupo"
-  df <- cbind(grupo, defunciones)
-  df$Año <- año
-  df$Jurisdicción <- nom_jurisidicción
-  
-  if(año >= 2022) {dt <- setDT(df[-2, ])} else {
-    dt <- setDT(df[-c(1,3),])
-  }
-  
-  return(dt)
+  datos_plot %>%
+    group_by(ano) %>%
+    e_charts(grupo_edad) %>%
+    e_area(tasa, stack = "grp") %>%
+    e_title(text = "Distribución de tasa por edad a lo largo del tiempo") %>%
+    e_tooltip(trigger = "axis") %>%
+    e_legend(type = "scroll", bottom = 0) %>%
+    e_color(viridis::viridis(16))
 }
 
-# ==============================================================================
-# 2. IMPORTAR Y UNIFICAR DATOS
-# ==============================================================================
+crear_area_apilada_tasa(resumen_epidemiologico)
+```
 
-# Importar datos y crear dataset unificado
-
-jurisdicciones <- excel_sheets(
-  "./poblaciones/proyecciones_jurisdicciones_2022_2040_c2.xlsx")[-c(1:2)]  # excluir índice y notas
-
-años <- 2010:2025
-
-
-lista_por_año <- lapply(años, function(ano) {
-  cat("\nProcesando año:", ano, "\n")
+## Área apilada (casos)
+```{r apilada_bruta, echo=FALSE}
+crear_area_apilada_edad <- function(datos_ca) {
   
-  datos_año <- lapply(jurisdicciones, function(juris) {
-    nombre <- sub(".*-", "", juris)
-    
-    cat("  -", nombre, "\n")
-    
-    tryCatch({
-      obtener_año(jurisdicción = nombre,
-                  año = ano)
-    }, error = function(e) {
-      cat("    Error:", e$message, "\n")
-      return(NULL)
-    })
-  })
+  datos_plot <- ca[provres == 1 & ! grupo_edad %like% "^[0-1]", 
+                   .(casos = sum(cuenta, na.rm = TRUE)), 
+                   keyby = .(ano, grupo_edad)]
   
-  rbindlist(datos_año, fill = TRUE)
-})
-
-poblacion_total <- rbindlist(lista_por_año, fill = TRUE)
-
-saveRDS(poblacion_total, "./poblaciones/poblacion_total_10_25.rds")
-
-# ==============================================================================
-# 3. COMPLETAR SERIE TEMPORAL CON RETROPROYECCIONES 
-# ==============================================================================
-# Hacemos retroproyecciones con método exponencial para período 2005-2009 por separado para cada sexo
-
-# Función de retroproyección:
-
-retroproyectar_exp <- function(dt_ajuste, anios_pred) {
-  # dt_ajuste YA DEBE ser solo los años 2010-2015
-  modelo <- lm(log(poblacion) ~ Año, data = dt_ajuste)
-  pred_log <- predict(modelo, newdata = data.frame(Año = anios_pred))
-  pred <- round(exp(pred_log))
-  return(data.table(Año = anios_pred, poblacion = pred))
+  datos_plot %>%
+    group_by(ano) %>%
+    e_charts(grupo_edad) %>%
+    e_area(casos, stack = "grp") %>%
+    e_title(text = "Distribución de casos por edad a lo largo del tiempo") %>%
+    e_tooltip(trigger = "axis") %>%
+    e_legend(type = "scroll", bottom = 0) %>%
+    e_color(viridis::viridis(16))
 }
 
-# Preparar datos en formato largo
-pob_largo <- poblacion_total[Grupo != "Total", 
-                             .(Jurisdicción, Año, Grupo, 
-                               Varones, Mujeres, `Ambos sexos`)]
-
-pob_largo <- melt(pob_largo,
-                  id.vars = c("Jurisdicción", "Año", "Grupo"),
-                  measure.vars = c("Varones", "Mujeres", "Ambos sexos"),
-                  variable.name = "Sexo",
-                  value.name = "poblacion")
-
-# Años a predecir
-anios_retro <- 2005:2009
-
-# Extraer datos base (2010-2015) - esto es lo que va a la función
-pob_base <- pob_largo[Año %in% 2010:2015]
-
-# Verificar que tenemos datos
-stopifnot(nrow(pob_base) > 0)
-
-# Aplicar retroproyección a cada combinación
-pob_retro <- pob_base[, {
-  retroproyectar_exp(.SD, anios_retro)
-}, by = .(Jurisdicción, Grupo, Sexo)]
-
-# Unir datos observados (2010-2025) con retroproyectados (2005-2009)
-pob_sexo_completa <- rbind(
-  pob_largo[Año >= 2010],  # datos reales a partir de 2010
-  pob_retro,               # datos estimados 2005-2009
-  fill = TRUE
-)
-
-setorder(pob_sexo_completa, Jurisdicción, Grupo, Sexo, Año)
-
-# Reconstruir la columna Ambos sexos
-pob_ancho <- dcast(pob_sexo_completa,
-                   Jurisdicción + Grupo + Año ~ Sexo,
-                   value.var = "poblacion")
-
-# Para años retroproyectados, crear Ambos sexos como suma
-pob_ancho[Año < 2010, `Ambos sexos` := Varones + Mujeres]
-
-# Reordenar columnas
-setcolorder(pob_ancho, c("Jurisdicción", "Año", "Grupo", 
-                         "Ambos sexos", "Varones", "Mujeres"))
-setorder(pob_ancho, Jurisdicción, Grupo, Año)
-
-# Guardar objeto para uso futuro
-saveRDS(pob_ancho, "./poblaciones/poblacion_proyectada_05_25.rds")
-# ==============================================================================
-# 4. IMPORTAR POBLACIÓN ESTÁNDAR
-# ==============================================================================
-# Copiamos en portapapeles e importamos con read.table
-
-poblacion_estandar_oms <- read.table("clipboard", 
-                                     # Fuente: https://seer.cancer.gov/stdpopulations/world.who.html
-                                     header = TRUE,
-                                     sep = "\t")
-
-# Transformamos a data.table
-poblacion_estandar_oms_DT <- setDT(poblacion_estandar_oms)
-
-# Adecuamos grupos etarios para coincidir con nuestros datos
-poblacion_estandar_oms_DT[Grupo.de.edad %ilike% "^0-|^5-", Grupo.de.edad := "0-9"]
-poblacion_estandar_oms_DT[Grupo.de.edad %ilike% "^8|^9|^100", Grupo.de.edad := "80+"]
-
-# Seleccionamos columnas de interés y guardamos el objeto
-pob_estandar_final <- poblacion_estandar_oms_DT[!Grupo.de.edad == "Total", .(Total=sum(as.numeric(gsub("\\.", "", Redondeado.a.números.enteros)), na.rm = TRUE)),
-                                                Grupo.de.edad]
-
-saveRDS(pob_estandar_final, "poblacion_estandar.rds")
-
+crear_area_apilada_edad(resumen_epidemiologico)
 ```
 
-## Consolidación de datos de mortalidad
+## Tendencia grupos etarios
+```{r tendencia_ge, echo=FALSE}
+crear_small_multiples_edad <- function(datos_ca) {
+  library(ggplot2)
+  
+  datos_plot <- ca[provres == 1 &! grupo_edad %like% "^[0-2]", 
+                   .(Tasa = mean(tasa, na.rm = TRUE)), 
+                   by = .(Año = ano, `Grupo etario` = grupo_edad)]
+  
+  ggplot(datos_plot, aes(x = Año, y = Tasa)) +
+    geom_line(color = "#440154", linewidth = 1) +
+    geom_point(color = "#440154", size = 2) +
+    facet_wrap(~`Grupo etario`, scales = "free_y", ncol = 4) +
+    labs(title = "Tendencias por grupo etario",
+         subtitle = "República Argentina",
+         x = "Año", y = "Tasa x 100k mujeres") +
+    theme_minimal() +
+    theme(strip.background = element_rect(fill = "#f0f0f0"),
+          strip.text = element_text(face = "bold"))
+}
 
-```{r}
-#| label: Mortalidad 
-#| eval: false
-
-# ==============================================================================
-# 1. IMPORTAR Y ADECUAR DATOS
-# ==============================================================================
-# Traemos los objetos creados en pasos previos
-
-defunciones <- readRDS("./defunciones/defunciones_totales.rds")
-poblaciones <- readRDS("./poblaciones/poblacion_proyectada_05_25.rds")
-poblaciones <- poblaciones[Año %in% unique(defunciones$ano)]
-
-# Adecuar grupos etarios en poblaciones
-poblaciones[Grupo %ilike% "^0-|^5-", Grupo := "0-9"]
-poblaciones[Grupo %ilike% "^8|^9|^100", Grupo := "80+"]
-poblaciones <- poblaciones[, .(`Ambos sexos` = sum(`Ambos sexos`),
-                               Varones = sum(Varones),
-                               Mujeres = sum(Mujeres)),
-                           by = .(Jurisdicción, Año, Grupo)]
-
-# Adecuar grupos etarios en defunciones
-defunciones[, grupo_edad := fcase(
-  grupedad %ilike% "01\\.0 a 6 d|01_Menor de 1|02\\.7 a 27 d|03\\.28 d|031\\. Menor|04\\.1 a|05\\.2 a|06\\.3 a|07\\.4 a", "0-9",
-  grupedad %ilike% "02_1 a 9|08\\.5 a 9", "0-9",
-  grupedad %ilike% "03_10 a 14|09\\.10 a 14", "10-14",
-  grupedad %ilike% "04_15 a 19|10\\.15 a 19", "15-19",
-  grupedad %ilike% "05_20 a 24|11\\.20 a 24", "20-24",
-  grupedad %ilike% "06_25 a 29|12\\.25 a 29", "25-29",
-  grupedad %ilike% "07_30 a 34|13\\.30 a 34", "30-34",
-  grupedad %ilike% "08_35 a 39|14\\.35 a 39", "35-39",
-  grupedad %ilike% "09_40 a 44|15\\.40 a 44", "40-44",
-  grupedad %ilike% "10_45 a 49|16\\.45 a 49", "45-49",
-  grupedad %ilike% "11_50 a 54|17\\.50 a 54", "50-54",
-  grupedad %ilike% "12_55 a 59|18\\.55 a 59", "55-59",
-  grupedad %ilike% "13_60 a 64|19\\.60 a 64", "60-64",
-  grupedad %ilike% "14_65 a 69|20\\.65 a 69", "65-69",
-  grupedad %ilike% "15_70 a 74|21\\.70 a 74", "70-74",
-  grupedad %ilike% "16_75 a 79|22\\.75 a 79", "75-79",
-  grupedad %ilike% "23\\.80 a 84|17_80 y m|24\\.85 y m", "80+",
-  grupedad %ilike% "25\\.|99_", NA_character_,
-  default = NA_character_
-)]
-
-# Convertir a factor
-grupos <- poblaciones$Grupo |> unique() |> sort()
-poblaciones[, Grupo := factor(Grupo, levels = grupos)]
-defunciones[, grupo_edad := factor(grupo_edad, levels = grupos)]
-
-# Adecuar variable sexo
-poblaciones_long <- melt(poblaciones, 
-                         measure.vars = c("Ambos sexos", "Varones", "Mujeres"), 
-                         variable.name = "nomsexo", 
-                         value.name = "Total")
-
-poblaciones_long[, nomsexo := fcase(nomsexo %ilike% "Mujeres", "Mujer",
-                                    nomsexo %ilike% "Varones", "Varón",
-                                    nomsexo %ilike% "Ambos", "Ambos sexos",
-                                    default = NA)]
-
-# Matchear jurisdicciones
-poblaciones_long[, provres := fcase(
-  Jurisdicción == "BUENOS AIRES", 6,
-  Jurisdicción == "CABA", 2,
-  Jurisdicción == "CATAMARCA", 10,
-  Jurisdicción == "CHACO", 22,
-  Jurisdicción == "CHUBUT", 26,
-  Jurisdicción == "CÓRDOBA", 14,
-  Jurisdicción == "CORRIENTES", 18,
-  Jurisdicción == "ENTRE RÍOS", 30,
-  Jurisdicción == "FORMOSA", 34,
-  Jurisdicción == "JUJUY", 38,
-  Jurisdicción == "LA PAMPA", 42,
-  Jurisdicción == "LA RIOJA", 46,
-  Jurisdicción == "MENDOZA", 50,
-  Jurisdicción == "MISIONES", 54,
-  Jurisdicción == "NEUQUÉN", 58,
-  Jurisdicción == "RÍO NEGRO", 62,
-  Jurisdicción == "SALTA", 66,
-  Jurisdicción == "SAN JUAN", 70,
-  Jurisdicción == "SAN LUIS", 74,
-  Jurisdicción == "SANTA CRUZ", 78,
-  Jurisdicción == "SANTA FE", 82,
-  Jurisdicción == "SANTIAGO DEL ESTERO", 86,
-  Jurisdicción == "TIERRA DEL FUEGO", 94,
-  Jurisdicción == "TUCUMÁN", 90,
-  Jurisdicción == "TOTAL DEL PAÍS", 1,
-  default = NA_character_
-)]
-
-# ==============================================================================
-# 2. CONSTRUIR TASAS
-# ==============================================================================
-
-# Hacer join para incorporar poblaciones al objeto de defunciones
-defunciones[poblaciones_long, poblacion := i.Total, 
-            on = .(nomsexo, provres, grupo_edad = Grupo, ano = Año)]
-
-# Eliminar filas sin provincia
-setkey(defunciones, provres)
-defunciones <- defunciones[!provres %in% 98:99]
-
-# Crear tasa bruta
-defunciones[, tasa := cuenta / poblacion * 100000]
-
-# Construir total nacional de defunciones
-total_pais <- defunciones[, .(cuenta = sum(cuenta),
-                              provres = 1,
-                              nomprov = "República Argentina (total país)"), 
-                          .(sexo, causa, mat, grupedad, ano, nomsexo,
-                            nomcausa, grupo_edad)]
-
-total_pais[, `:=`(provres = 1,
-                  nomprov = "República Argentina (total país)")]
-
-# Construir total nacional de poblaciones
-pob_nac <- poblaciones_long[provres != 1, .(Total = sum(Total, na.rm = TRUE)), 
-                            keyby = .(nomsexo, ano = Año, grupo_edad = Grupo)]
-
-# Construir la tasa en el total nacional
-total_pais[pob_nac, poblacion := i.Total, on = .(nomsexo, ano, grupo_edad)]
-total_pais[, tasa := cuenta / poblacion * 100000]
-
-# Unir ambos datasets
-def_full <- rbind(defunciones, total_pais)
-nomjur <- c("República Argentina (total país)", 
-            def_full[provres != 1, sort(unique(nomprov))])
-def_full[, nomprov := factor(nomprov, levels = nomjur)]
-
-# Guardamos objetos
-saveRDS(def_full, "datos_consolidados.rds")
-saveRDS(poblaciones_long, "poblaciones_consolidadas.rds")
-
+ggplotly(crear_small_multiples_edad(resumen_epidemiologico))
 ```
 
-## Creación de tasas de defunción por cáncer de mama
-
-
-```{r}
-#| label: Mama 
-#| echo: true
-#| warning: false
-#| message: false
-# ==============================================================================
-# ---- Analizar mortalidad por cáncer de mama ----
-# ==============================================================================
-# ---- Carga de librerías ----
-library(data.table)
-
-# ==============================================================================
-# 1. IMPORTAR Y PREPARAR DATOS
-# ==============================================================================
-def_full <- readRDS("datos_consolidados.rds")
-def_full[, region := fcase(
-  nomprov %ilike% "jujuy|salta|tucum|catamar|santiago|rioja", "NOA",
-  nomprov %ilike% "formosa|chaco|misiones|corriente|entre", "NEA",
-  nomprov %ilike% "rdoba|santa f|buenos|caba|buenos", "Pampeana",
-  nomprov %ilike% "mendoza|luis|juan|juán", "Cuyo",
-  nomprov %ilike% "cruz|neuq|negro|chubut|fuego|pampa", "Patagonia",
-  nomprov %ilike% "argen", "República Argentina (total país)",
-  default = "Otro país o sin especificar"
-)]
-
-setkey(def_full, causa)
-ca <- def_full["C50"][nomsexo == "Mujer" & !is.na(grupo_edad)]
-
-# Cargar poblaciones y población estándar OMS
-poblaciones_long <- readRDS("poblaciones_consolidadas.rds")
-pob_estandar <- readRDS("poblacion_estandar.rds")
-setnames(pob_estandar, "Grupo.de.edad", "grupo_edad")
-pob_estandar[, peso := Total / sum(Total)]
-
-# ==============================================================================
-# 2. CÁLCULO DE POBLACIÓN TOTAL DE MUJERES (TODOS LOS GRUPOS ETARIOS)
-# ==============================================================================
-# Esto incluye TODOS los grupos de edad, no solo los que tienen casos de cáncer
-pob_total_mujeres <- poblaciones_long[nomsexo == "Mujer", 
-                                      .(pob_total_fem = sum(Total, na.rm = TRUE)), 
-                                      by = .(ano = Año, provres, nomprov = Jurisdicción)]
-
-# ==============================================================================
-# 3. CÁLCULO DE TASAS BRUTAS Y AJUSTADAS
-# ==============================================================================
-# Unir pesos de población estándar OMS
-ca_est <- merge(ca, 
-                pob_estandar[, .(grupo_edad, peso)], 
-                by = "grupo_edad", 
-                all.x = TRUE)
-
-# Calcular muertes y tasa ajustada por edad
-muertes_ca <- ca_est[, .(
-  muertes_mama_total = sum(cuenta, na.rm = TRUE),
-  tasa_ajustada = sum(tasa * peso, na.rm = TRUE)
-), keyby = .(ano, provres, nomprov)]
-
-# Hacer merge con población total de mujeres
-tasas_consolidadas <- merge(
-  muertes_ca,
-  pob_total_mujeres,
-  by = c("ano", "provres"),
-  all.x = TRUE
-)
-
-# Calcular tasa bruta con población total correcta
-tasas_consolidadas[, tasa_bruta := (muertes_mama_total / pob_total_fem) * 100000]
-
-# Mantener solo las columnas relevantes y el nombre de provincia correcto
-tasas_consolidadas[, nomprov := nomprov.x]
-tasas_consolidadas[, c("nomprov.x", "nomprov.y") := NULL]
-
-# ==============================================================================
-# 4. CÁLCULO DE MORTALIDAD PROPORCIONAL (Grupo específico 40-49 años)
-# ==============================================================================
-def_objetivo <- def_full[nomsexo == "Mujer" & grupo_edad %in% c("40-44", "45-49")]
-
-prop_mort <- def_objetivo[, .(
-  muertes_40_49_todas = sum(cuenta, na.rm = TRUE),
-  muertes_40_49_cancer = sum(cuenta[causa %ilike% "^C"], na.rm = TRUE),
-  muertes_40_49_mama = sum(cuenta[causa == "C50"], na.rm = TRUE)
-), by = .(ano, provres, nomprov)]
-
-# Calcular proporciones específicas
-prop_mort[, prop_mama_sobre_total_40_49 := round((muertes_40_49_mama / muertes_40_49_todas) * 100, 2)]
-prop_mort[, prop_mama_sobre_cancer_40_49 := round((muertes_40_49_mama / muertes_40_49_cancer) * 100, 2)]
-
-# ==============================================================================
-# 5. UNIFICACIÓN EN UN ÚNICO OBJETO
-# ==============================================================================
-resumen_epidemiologico <- merge(
-  tasas_consolidadas, 
-  prop_mort[, .(ano, provres, nomprov, prop_mama_sobre_total_40_49, prop_mama_sobre_cancer_40_49)], 
-  by = c("ano", "provres", "nomprov"), 
-  all.x = TRUE
-)
-
-# Ordenar por jurisdicción y año
-setkey(resumen_epidemiologico, provres, ano)
-
+## Datos Detallados 
+```{r tabla, echo=FALSE}
+library(DT)
+resumen_epidemiologico %>%
+  datatable(
+    filter = 'top',
+    options = list(pageLength = 20, scrollX = TRUE),
+    rownames = FALSE
+  ) %>%
+  formatRound(c('tasa_bruta', 'tasa_ajustada'), 2)
 ```
 
-```{r}
-#| label: Print 
-#| echo: true
-#| warning: false
-#| message: false
-# ==============================================================================
-# 6. VERIFICACIÓN
-# ==============================================================================
+:::
 
-resumen_epidemiologico |> 
-  head() |> 
-  flextable::flextable() |> 
-  flextable::theme_vanilla()
+## Tasa ajustada de mortalidad
 
+::: {.panel-tabset}
+
+## Mapa de calor 
+```{r hm_ajustada, echo=FALSE}
+hm_ajustada
 ```
 
-# Resultados
+## Líneas
+```{r lineas_ajustada, echo=FALSE}
+lineas_ajustada
+```
+
+## Mapa
+```{r mapa_ajustada, echo=FALSE}
+mapa_ajustada
+```
+
+:::
+
+## Mortalidad proporcional
+
+::: {.panel-tabset}
+
+## Mapa de calor 
+```{r hm_proporcional, echo=FALSE}
+hm_proporcional
+```
+
+## Líneas
+```{r lineas_proporcional, echo=FALSE}
+lineas_proporcional
+```
+
+## Mapa
+```{r mapa_proporcional, echo=FALSE}
+mapa_proporcional
+```
+
+:::
