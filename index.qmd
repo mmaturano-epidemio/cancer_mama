@@ -97,8 +97,8 @@ crear_area_apilada_edad <- function(datos_ca) {
 crear_area_apilada_edad(resumen_epidemiologico)
 ```
 
-## Tendencia grupos etarios
-```{r tendencia_ge, echo=FALSE}
+## Tendencia grupos etarios (Argentina)
+```{r tendencia_ge, echo=FALSE, message=FALSE}
 crear_small_multiples_edad <- function(datos_ca) {
   library(ggplot2)
   
@@ -109,9 +109,35 @@ crear_small_multiples_edad <- function(datos_ca) {
   ggplot(datos_plot, aes(x = Año, y = Tasa)) +
     geom_line(color = "#440154", linewidth = 1) +
     geom_point(color = "#440154", size = 2) +
+    geom_smooth(method = "lm", se = FALSE, color = "red") +
     facet_wrap(~`Grupo etario`, scales = "free_y", ncol = 4) +
     labs(title = "Tendencias por grupo etario",
          subtitle = "República Argentina",
+         x = "Año", y = "Tasa x 100k mujeres") +
+    theme_minimal() +
+    theme(strip.background = element_rect(fill = "#f0f0f0"),
+          strip.text = element_text(face = "bold"))
+}
+
+ggplotly(crear_small_multiples_edad(resumen_epidemiologico))
+```
+
+## Tendencia grupos etarios (Neuquén)
+```{r tendencia_ge_nqn, echo=FALSE, message=FALSE}
+crear_small_multiples_edad <- function(datos_ca) {
+  library(ggplot2)
+  
+  datos_plot <- ca[provres == 50 &! grupo_edad %like% "^[0-2]", 
+                   .(Tasa = mean(tasa, na.rm = TRUE)), 
+                   by = .(Año = ano, `Grupo etario` = grupo_edad)]
+  
+  ggplot(datos_plot, aes(x = Año, y = Tasa)) +
+    geom_line(color = "#440154", linewidth = 1) +
+    geom_smooth(method = "lm", se = FALSE, color = "red") +
+    geom_point(color = "#440154", size = 2) +
+    facet_wrap(~`Grupo etario`, scales = "free_y", ncol = 4) +
+    labs(title = "Tendencias por grupo etario",
+         subtitle = "Provincia del Neuquén",
          x = "Año", y = "Tasa x 100k mujeres") +
     theme_minimal() +
     theme(strip.background = element_rect(fill = "#f0f0f0"),
