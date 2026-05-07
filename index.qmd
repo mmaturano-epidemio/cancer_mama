@@ -109,7 +109,8 @@ crear_small_multiples_edad <- function(datos_ca) {
   ggplot(datos_plot, aes(x = Año, y = Tasa)) +
     geom_line(color = "#440154", linewidth = 1) +
     geom_point(color = "#440154", size = 2) +
-    geom_smooth(method = "lm", se = FALSE, color = "red") +
+    geom_smooth(method = "loess", se = FALSE, color = "red") +
+    geom_smooth(method = "lm", se = FALSE, color = "blue") +
     facet_wrap(~`Grupo etario`, scales = "free_y", ncol = 4) +
     labs(title = "Tendencias por grupo etario",
          subtitle = "República Argentina",
@@ -133,7 +134,8 @@ crear_small_multiples_edad <- function(datos_ca) {
   
   ggplot(datos_plot, aes(x = Año, y = Tasa)) +
     geom_line(color = "#440154", linewidth = 1) +
-    geom_smooth(method = "lm", se = FALSE, color = "red") +
+    geom_smooth(method = "loess", se = FALSE, color = "red") +
+    geom_smooth(method = "lm", se = FALSE, color = "blue") +
     geom_point(color = "#440154", size = 2) +
     facet_wrap(~`Grupo etario`, scales = "free_y", ncol = 4) +
     labs(title = "Tendencias por grupo etario",
