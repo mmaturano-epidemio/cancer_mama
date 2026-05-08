@@ -18,6 +18,10 @@ def_full[, region := fcase(
   default = "Otro país o sin especificar"
 )]
 
+
+def_full <- def_full[, .(cuenta = sum(cuenta)), 
+                     .(provres, sexo, causa, mat, ano, nomprov, nomsexo, nomcausa, grupo_edad, poblacion)][, tasa := cuenta / poblacion * 100000]
+
 setkey(def_full, causa)
 ca <- def_full["C50"][nomsexo == "Mujer" & !is.na(grupo_edad)]
 
